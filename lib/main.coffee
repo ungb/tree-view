@@ -1,8 +1,7 @@
-{Disposable, CompositeDisposable} = require 'event-kit'
+{CompositeDisposable} = require 'event-kit'
 path = require 'path'
 
 FileIcons = require './file-icons'
-TreeView = require './tree-view'
 
 module.exports =
   treeView: null
@@ -24,7 +23,6 @@ module.exports =
       'tree-view:duplicate': => @createView().copySelectedEntry()
       'tree-view:remove': => @createView().removeSelectedEntries()
       'tree-view:rename': => @createView().moveSelectedEntry()
-      'tree-view:show-current-file-in-file-manager': => @createView().showCurrentFileInFileManager()
     })
 
   deactivate: ->
@@ -35,10 +33,10 @@ module.exports =
 
   consumeFileIcons: (service) ->
     FileIcons.setService(service)
-    @treeView?.updateRoots()
-    new Disposable =>
+    @fileIconsDisposable = service.onWillDeactivate ->
       FileIcons.resetService()
       @treeView?.updateRoots()
+    @treeView?.updateRoots()
 
   serialize: ->
     if @treeView?
@@ -48,6 +46,7 @@ module.exports =
 
   createView: ->
     unless @treeView?
+      TreeView = require './tree-view'
       @treeView = new TreeView(@state)
     @treeView
 

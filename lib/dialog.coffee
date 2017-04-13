@@ -1,69 +1,48 @@
-{TextEditor, CompositeDisposable, Disposable, Emitter, Range, Point} = require 'atom'
+{$, TextEditorView, View} = require 'atom-space-pen-views'
 path = require 'path'
 
 module.exports =
-class Dialog
-  constructor: ({initialPath, select, iconClass, prompt} = {}) ->
-    @emitter = new Emitter()
-    @disposables = new CompositeDisposable()
+class Dialog extends View
+  @content: ({prompt} = {}) ->
+    @div class: 'tree-view-dialog', =>
+      @label prompt, class: 'icon', outlet: 'promptText'
+      @subview 'miniEditor', new TextEditorView(mini: true)
+      @div class: 'error-message', outlet: 'errorMessage'
 
-    @element = document.createElement('div')
-    @element.classList.add('tree-view-dialog')
-
-    @promptText = document.createElement('label')
-    @promptText.classList.add('icon')
-    @promptText.classList.add(iconClass) if iconClass
-    @promptText.textContent = prompt
-    @element.appendChild(@promptText)
-
-    @miniEditor = new TextEditor({mini: true})
-    blurHandler = =>
-      @close() if document.hasFocus()
-    @miniEditor.element.addEventListener('blur', blurHandler)
-    @disposables.add(new Disposable(=> @miniEditor.element.removeEventListener('blur', blurHandler)))
-    @disposables.add(@miniEditor.onDidChange => @showError())
-    @element.appendChild(@miniEditor.element)
-
-    @errorMessage = document.createElement('div')
-    @errorMessage.classList.add('error-message')
-    @element.appendChild(@errorMessage)
-
+  initialize: ({initialPath, select, iconClass} = {}) ->
+    @promptText.addClass(iconClass) if iconClass
     atom.commands.add @element,
       'core:confirm': => @onConfirm(@miniEditor.getText())
       'core:cancel': => @cancel()
-
-    @miniEditor.setText(initialPath)
+    @miniEditor.on 'blur', => @close() if document.hasFocus()
+    @miniEditor.getModel().onDidChange => @showError()
+    @miniEditor.getModel().setText(initialPath)
 
     if select
       extension = path.extname(initialPath)
       baseName = path.basename(initialPath)
-      selectionStart = initialPath.length - baseName.length
       if baseName is extension
         selectionEnd = initialPath.length
       else
         selectionEnd = initialPath.length - extension.length
-      @miniEditor.setSelectedBufferRange(Range(Point(0, selectionStart), Point(0, selectionEnd)))
+      range = [[0, initialPath.length - baseName.length], [0, selectionEnd]]
+      @miniEditor.getModel().setSelectedBufferRange(range)
 
   attach: ->
-    @panel = atom.workspace.addModalPanel(item: this)
-    @miniEditor.element.focus()
-    @miniEditor.scrollToCursorPosition()
+    @panel = atom.workspace.addModalPanel(item: this.element)
+    @miniEditor.focus()
+    @miniEditor.getModel().scrollToCursorPosition()
 
   close: ->
     panelToDestroy = @panel
     @panel = null
     panelToDestroy?.destroy()
-    @emitter.dispose()
-    @disposables.dispose()
-    @miniEditor.destroy()
     atom.workspace.getActivePane().activate()
 
   cancel: ->
     @close()
-    document.querySelector('.tree-view')?.focus()
+    $('.tree-view').focus()
 
   showError: (message='') ->
-    @errorMessage.textContent = message
-    if message
-      @element.classList.add('error')
-      window.setTimeout((=> @element.classList.remove('error')), 300)
+    @errorMessage.text(message)
+    @flashError() if message

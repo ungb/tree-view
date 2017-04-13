@@ -23,12 +23,6 @@ class AddDialog extends Dialog
       select: false
       iconClass: if isCreatingFile then 'icon-file-add' else 'icon-file-directory-create'
 
-  onDidCreateFile: (callback) ->
-    @emitter.on('did-create-file', callback)
-
-  onDidCreateDirectory: (callback) ->
-    @emitter.on('did-create-directory', callback)
-
   onConfirm: (newPath) ->
     newPath = newPath.replace(/\s+$/, '') # Remove trailing whitespace
     endsWithDirectorySeparator = newPath[newPath.length - 1] is path.sep
@@ -50,11 +44,11 @@ class AddDialog extends Dialog
         else
           fs.writeFileSync(newPath, '')
           repoForPath(newPath)?.getPathStatus(newPath)
-          @emitter.emit('did-create-file', newPath)
+          @trigger 'file-created', [newPath]
           @close()
       else
         fs.makeTreeSync(newPath)
-        @emitter.emit('did-create-directory', newPath)
+        @trigger 'directory-created', [newPath]
         @cancel()
     catch error
       @showError("#{error.message}.")

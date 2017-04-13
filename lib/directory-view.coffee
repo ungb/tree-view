@@ -3,16 +3,13 @@ Directory = require './directory'
 FileView = require './file-view'
 {repoForPath} = require './helpers'
 
-module.exports =
-class DirectoryView
-  constructor: (@directory) ->
+class DirectoryView extends HTMLElement
+  initialize: (@directory) ->
     @subscriptions = new CompositeDisposable()
     @subscriptions.add @directory.onDidDestroy => @subscriptions.dispose()
     @subscribeToDirectory()
 
-    @element = document.createElement('li')
-    @element.setAttribute('is', 'tree-view-directory')
-    @element.classList.add('directory', 'entry',  'list-nested-item',  'collapsed')
+    @classList.add('directory', 'entry',  'list-nested-item',  'collapsed')
 
     @header = document.createElement('div')
     @header.classList.add('header', 'list-item')
@@ -47,36 +44,22 @@ class DirectoryView
       @directoryName.title = @directory.name
       @directoryName.textContent = @directory.name
 
-    @element.appendChild(@header)
+    @appendChild(@header)
     @header.appendChild(@directoryName)
-    @element.appendChild(@entries)
+    @appendChild(@entries)
 
     if @directory.isRoot
-      @element.classList.add('project-root')
-      @header.classList.add('project-root-header')
+      @classList.add('project-root')
     else
-      @element.draggable = true
+      @draggable = true
       @subscriptions.add @directory.onDidStatusChange => @updateStatus()
       @updateStatus()
 
     @expand() if @directory.expansionState.isExpanded
 
-    @element.collapse = @collapse.bind(this)
-    @element.expand = @expand.bind(this)
-    @element.toggleExpansion = @toggleExpansion.bind(this)
-    @element.reload = @reload.bind(this)
-    @element.isExpanded = @isExpanded
-    @element.updateStatus = @updateStatus.bind(this)
-    @element.isPathEqual = @isPathEqual.bind(this)
-    @element.getPath = @getPath.bind(this)
-    @element.directory = @directory
-    @element.header = @header
-    @element.entries = @entries
-    @element.directoryName = @directoryName
-
   updateStatus: ->
-    @element.classList.remove('status-ignored', 'status-modified', 'status-added')
-    @element.classList.add("status-#{@directory.status}") if @directory.status?
+    @classList.remove('status-ignored', 'status-modified', 'status-added')
+    @classList.add("status-#{@directory.status}") if @directory.status?
 
   subscribeToDirectory: ->
     @subscriptions.add @directory.onDidAddEntries (addedEntries) =>
@@ -89,9 +72,9 @@ class DirectoryView
 
         insertionIndex = entry.indexInParentDirectory
         if insertionIndex < numberOfEntries
-          @entries.insertBefore(view.element, @entries.children[insertionIndex])
+          @entries.insertBefore(view, @entries.children[insertionIndex])
         else
-          @entries.appendChild(view.element)
+          @entries.appendChild(view)
 
         numberOfEntries++
 
@@ -103,13 +86,14 @@ class DirectoryView
 
   createViewForEntry: (entry) ->
     if entry instanceof Directory
-      view = new DirectoryView(entry)
+      view = new DirectoryElement()
     else
-      view = new FileView(entry)
+      view = new FileView()
+    view.initialize(entry)
 
     subscription = @directory.onDidRemoveEntries (removedEntries) ->
       for removedName, removedEntry of removedEntries when entry is removedEntry
-        view.element.remove()
+        view.remove()
         subscription.dispose()
         break
     @subscriptions.add(subscription)
@@ -125,26 +109,27 @@ class DirectoryView
   expand: (isRecursive=false) ->
     unless @isExpanded
       @isExpanded = true
-      @element.isExpanded = @isExpanded
-      @element.classList.add('expanded')
-      @element.classList.remove('collapsed')
+      @classList.add('expanded')
+      @classList.remove('collapsed')
       @directory.expand()
 
     if isRecursive
-      for entry in @entries.children when entry.classList.contains('directory')
+      for entry in @entries.children when entry instanceof DirectoryView
         entry.expand(true)
 
     false
 
   collapse: (isRecursive=false) ->
     @isExpanded = false
-    @element.isExpanded = false
 
     if isRecursive
       for entry in @entries.children when entry.isExpanded
         entry.collapse(true)
 
-    @element.classList.remove('expanded')
-    @element.classList.add('collapsed')
+    @classList.remove('expanded')
+    @classList.add('collapsed')
     @directory.collapse()
     @entries.innerHTML = ''
+
+DirectoryElement = document.registerElement('tree-view-directory', prototype: DirectoryView.prototype, extends: 'li')
+module.exports = DirectoryElement
